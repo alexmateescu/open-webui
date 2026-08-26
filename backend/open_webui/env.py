@@ -718,6 +718,22 @@ WEBUI_SECRET_KEY = os.getenv(
     os.getenv('WEBUI_JWT_SECRET_KEY', ''),
 )
 
+# Dedicated secret for JWT token signing - separate from API keys and other secrets
+# This prevents API keys from being used to forge JWT tokens
+# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+WEBUI_JWT_SECRET_KEY = os.getenv('WEBUI_JWT_SECRET_KEY', '')
+
+# If WEBUI_JWT_SECRET_KEY is not explicitly set, use WEBUI_SECRET_KEY as fallback
+# but log a warning to encourage proper configuration
+if not WEBUI_JWT_SECRET_KEY:
+    WEBUI_JWT_SECRET_KEY = WEBUI_SECRET_KEY
+    import logging
+    log = logging.getLogger(__name__)
+    log.warning(
+        "\n\nWARNING: WEBUI_JWT_SECRET_KEY is not explicitly set. "
+        "For security, use a dedicated secret for JWT signing that is separate from API keys.\n"
+    )
+
 ENABLE_VALVE_ENCRYPTION = os.getenv('ENABLE_VALVE_ENCRYPTION', 'False').lower() == 'true'
 
 WEBUI_SESSION_COOKIE_SAME_SITE = os.getenv('WEBUI_SESSION_COOKIE_SAME_SITE', 'lax')

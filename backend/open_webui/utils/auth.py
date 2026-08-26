@@ -33,6 +33,7 @@ from open_webui.env import (
     STATIC_DIR,
     TRUSTED_SIGNATURE_KEY,
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
+    WEBUI_JWT_SECRET_KEY,
     WEBUI_SECRET_KEY,
     pk,
 )
@@ -229,13 +230,17 @@ def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> st
     jti = str(uuid.uuid4())
     payload.update({'jti': jti, 'iat': datetime.now(UTC)})
 
-    encoded_jwt = jwt.encode(payload, SESSION_SECRET, algorithm=ALGORITHM)
+    # Use dedicated JWT secret for signing, fallback to SESSION_SECRET if not set
+    jwt_secret = WEBUI_JWT_SECRET_KEY if WEBUI_JWT_SECRET_KEY else SESSION_SECRET
+    encoded_jwt = jwt.encode(payload, jwt_secret, algorithm=ALGORITHM)
     return encoded_jwt
 
 
 def decode_token(token: str) -> dict | None:
     try:
-        decoded = jwt.decode(token, SESSION_SECRET, algorithms=[ALGORITHM])
+        # Use dedicated JWT secret for decoding, fallback to SESSION_SECRET if not set
+        jwt_secret = WEBUI_JWT_SECRET_KEY if WEBUI_JWT_SECRET_KEY else SESSION_SECRET
+        decoded = jwt.decode(token, jwt_secret, algorithms=[ALGORITHM])
         return decoded
     except Exception:
         return None
@@ -516,7 +521,7 @@ async def get_verified_user_by_token(token: str, redis=None):
 def get_admin_user(user=Depends(get_current_user)):
     if user.role != 'admin':
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
     return user

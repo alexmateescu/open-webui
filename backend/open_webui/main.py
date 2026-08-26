@@ -44,6 +44,7 @@ from open_webui.config import (
     BYPASS_ADMIN_ACCESS_CONTROL,
     CACHE_DIR,
     CORS_ALLOW_ORIGIN,
+    CORS_TRUSTED_ORIGINS,
     DEFAULT_LOCALE,
     ENABLE_ADMIN_ANALYTICS,
     # Admin
@@ -68,6 +69,7 @@ from open_webui.config import (
     WEBUI_NAME,
     async_reset_config,
     import_legacy_config_json,
+    is_origin_allowed,
     seed_registered_defaults,
 )
 from open_webui.constants import ERROR_MESSAGES, TASKS
@@ -298,7 +300,19 @@ class SPAStaticFiles(StaticFiles):
 class CORSStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
-        response.headers['Access-Control-Allow-Origin'] = '*'
+
+        # Only set CORS header for trusted origins
+        # Do NOT reflect the request origin arbitrarily
+        origin = scope.get('headers', {}).get(b'origin', b'').decode()
+
+        if origin and is_origin_allowed(origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Vary'] = 'Origin'
+        else:
+            # Remove CORS header for untrusted origins
+            response.headers.pop('Access-Control-Allow-Origin', None)
+            response.headers.pop('Vary', None)
+
         return response
 
 
@@ -770,9 +784,31 @@ app.add_middleware(AuthTokenMiddleware, fastapi_app=app)
 app.add_middleware(WebsocketUpgradeGuardMiddleware)
 
 
+# CORS_TRUSTED_ORIGINS takes precedence over CORS_ALLOW_ORIGIN
+# If CORS_TRUSTED_ORIGINS is configured, use it; otherwise fall back to CORS_ALLOW_ORIGIN
+if CORS_TRUSTED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = CORS_TRUSTED_ORIGINS
+else:
+    # For backwards compatibility, use CORS_ALLOW_ORIGIN if configured
+    # Filter out empty strings and wildcard
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in CORS_ALLOW_ORIGIN
+        if origin.strip() and origin.strip() != '*'
+    ]
+
+# If no origins are configured, log a warning and use empty list (no cross-origin)
+if not CORS_ALLOWED_ORIGINS:
+    log.warning(
+        "\n\nWARNING: CORS_TRUSTED_ORIGINS is not configured. "
+        "Cross-origin requests will be denied by default. "
+        "Set CORS_TRUSTED_ORIGINS in your environment for legitimate frontend origins.\n"
+    )
+    CORS_ALLOWED_ORIGINS = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGIN,
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

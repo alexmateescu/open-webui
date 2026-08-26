@@ -2103,10 +2103,49 @@ def validate_cors_origin(origin):
         raise ValueError(f"Invalid URL structure in CORS_ALLOW_ORIGIN: '{origin}'.")
 
 
+# CORS_TRUSTED_ORIGINS: Explicit list of trusted origins for CORS
+# Format: semicolon-separated list of trusted origins
+# Example: CORS_TRUSTED_ORIGINS=http://localhost:5173;https://app.example.com
+# Default: empty list (no cross-origin requests allowed unless explicitly configured)
+CORS_TRUSTED_ORIGINS = os.getenv('CORS_TRUSTED_ORIGINS', '').split(';')
+
+# Filter out empty strings if no origins are set
+CORS_TRUSTED_ORIGINS = [origin.strip() for origin in CORS_TRUSTED_ORIGINS if origin.strip()]
+
+
+def is_origin_allowed(origin: str) -> bool:
+    """
+    Check if an origin is explicitly allowed.
+    This prevents CORS misconfigurations that could enable cross-site attacks.
+
+    Args:
+        origin: The origin header value from the request
+
+    Returns:
+        True if origin is in the trusted list, False otherwise
+    """
+    if not origin:
+        return False
+
+    # Normalize the origin for comparison
+    origin_normalized = origin.lower().rstrip('/')
+
+    # If no trusted origins are configured, deny all (secure default)
+    if not CORS_TRUSTED_ORIGINS:
+        return False
+
+    # Check if origin is in the trusted list
+    for trusted in CORS_TRUSTED_ORIGINS:
+        if trusted.lower().rstrip('/') == origin_normalized:
+            return True
+
+    return False
+
+
 # For production, you should only need one host as
 # fastapi serves the svelte-kit built frontend and backend from the same host and port.
-# To test CORS_ALLOW_ORIGIN locally, you can set something like
-# CORS_ALLOW_ORIGIN=http://localhost:5173;http://localhost:8080
+# To test CORS_TRUSTED_ORIGINS locally, you can set something like
+# CORS_TRUSTED_ORIGINS=http://localhost:5173;http://localhost:8080
 # in your .env file depending on your frontend port, 5173 in this case.
 CORS_ALLOW_ORIGIN = os.getenv('CORS_ALLOW_ORIGIN', '*').split(';')
 
@@ -2115,8 +2154,15 @@ CORS_ALLOW_ORIGIN = os.getenv('CORS_ALLOW_ORIGIN', '*').split(';')
 # Provide a semicolon-separated list of allowed schemes in the environment variable CORS_ALLOW_CUSTOM_SCHEMES.
 CORS_ALLOW_CUSTOM_SCHEME = os.getenv('CORS_ALLOW_CUSTOM_SCHEME', '').split(';')
 
+# Validate CORS_TRUSTED_ORIGINS if configured
+if CORS_TRUSTED_ORIGINS:
+    for origin in CORS_TRUSTED_ORIGINS:
+        validate_cors_origin(origin)
+
+# Warn if CORS_ALLOW_ORIGIN is set to wildcard (legacy config)
 if CORS_ALLOW_ORIGIN == ['*']:
     log.warning("\n\nWARNING: CORS_ALLOW_ORIGIN IS SET TO '*' - NOT RECOMMENDED FOR PRODUCTION DEPLOYMENTS.\n")
+    log.warning("Please use CORS_TRUSTED_ORIGINS instead to explicitly configure allowed origins.\n")
 else:
     # You have to pick between a single wildcard or a list of origins.
     # Doing both will result in CORS errors in the browser.
