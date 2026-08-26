@@ -452,6 +452,17 @@ except (ValueError, TypeError):
 UVICORN_WS_PER_MESSAGE_DEFLATE = os.getenv('UVICORN_WS_PER_MESSAGE_DEFLATE', 'True').lower() == 'true'
 
 ####################################
+# Forwarded Headers
+####################################
+
+# Security: Restrict to 127.0.0.1 (only trust the local reverse proxy).
+# Setting '*' allows any client to spoof X-Forwarded-For, bypassing IP-based
+# access controls and forging audit log source addresses. Only use '*' when
+# the application is isolated behind a trusted reverse proxy on a private network.
+# See: https://github.com/OhanaSec/jc-pentest-harness (OW-H3)
+FORWARDED_ALLOW_IPS = os.getenv('FORWARDED_ALLOW_IPS', '127.0.0.1')
+
+####################################
 # WEBSOCKET SUPPORT
 ####################################
 
