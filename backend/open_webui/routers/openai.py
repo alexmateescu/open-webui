@@ -326,6 +326,23 @@ def _mask_api_key(key: str) -> str:
     return f'{key[:3]}...{key[-4:]}'
 
 
+def _resolve_submitted_key(submitted: str, stored: str | None) -> str:
+    """Resolve a submitted API key against the stored one.
+
+    The admin UI receives masked keys via get_openai_config() (see OW-M5).
+    When an admin saves the Connections page without re-entering a key, the
+    masked placeholder is posted back verbatim. Without this check the masked
+    value would overwrite the real key and break the provider connection.
+    A submitted value that is exactly the mask of the stored key means the
+    user did not modify it, so the stored key is preserved untouched.
+    """
+    if not isinstance(submitted, str) or not submitted:
+        return submitted if isinstance(submitted, str) else ''
+    if stored and submitted == _mask_api_key(stored):
+        return stored
+    return submitted
+
+
 async def get_openai_config() -> dict:
     values = await Config.get_many(*OPENAI_CONFIG_KEYS.values())
     result = {field: values[storage_key] for field, storage_key in OPENAI_CONFIG_KEYS.items() if storage_key in values}
@@ -579,6 +596,12 @@ async def update_config(request: Request, form_data: OpenAIConfigForm, user=Depe
         api_keys = api_keys[: len(form_data.OPENAI_API_BASE_URLS)]
     elif len(api_keys) < len(form_data.OPENAI_API_BASE_URLS):
         api_keys = [*api_keys, *([''] * (len(form_data.OPENAI_API_BASE_URLS) - len(api_keys)))]
+
+    # Security: GET /config returns masked keys (OW-M5). Preserve stored keys
+    # when the UI posts the masked placeholder back unchanged, so saving the
+    # page without re-typing a key does not clobber the real credential.
+    _, _, stored_api_keys, _ = await get_openai_runtime_config()
+    api_keys = [_resolve_submitted_key(submitted, stored_api_keys[idx] if idx < len(stored_api_keys) else None) for idx, submitted in enumerate(api_keys)]
 
     valid_keys = set(map(str, range(len(form_data.OPENAI_API_BASE_URLS))))
     api_configs = {key: value for key, value in form_data.OPENAI_API_CONFIGS.items() if key in valid_keys}
