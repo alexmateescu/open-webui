@@ -400,6 +400,9 @@ class UsersTable:
                     'updated_at': int(time.time()),
                     'username': username,
                     'oauth': oauth,
+                    # settings must never be null: the SPA dereferences settings.ui
+                    # on boot and a null payload garbles the UI and breaks model access
+                    'settings': {},
                 }
             )
             result = User(**user.model_dump())
