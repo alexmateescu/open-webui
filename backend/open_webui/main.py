@@ -1514,6 +1514,10 @@ async def chat_completion(
                             'request': request,
                             'form_data': form_data,
                             'user': user,
+                            # background_tasks_handler reads ctx['model'] for the
+                            # post-turn memory review; without it every initial
+                            # title generation died with KeyError: 'model'.
+                            'model': model,
                             'metadata': title_metadata,
                             'tasks': {TASKS.TITLE_GENERATION: initial_title_generation},
                             'event_emitter': event_emitter,
