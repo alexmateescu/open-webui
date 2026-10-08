@@ -76,6 +76,9 @@
 
 	const saveHandler = async () => {
 		const updated: Record<string, any> = {};
+		// Language lives on this page but must be persisted with Save; the
+		// select's on:change only switches the session in-memory.
+		updated.language = lang;
 		if (canEditSystemPrompt) {
 			updated.system = system !== '' ? system : null;
 		}

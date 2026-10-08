@@ -1285,6 +1285,15 @@
 
 					if (sessionUser) {
 						await user.set(sessionUser);
+
+						// Apply the user's saved language when the browser cache was
+						// wiped (enterprise "delete site data on close"); otherwise
+						// localStorage.locale detection below already covers it.
+						const savedLanguage = sessionUser?.settings?.ui?.language;
+						if (!localStorage.locale && savedLanguage) {
+							await changeLanguage(savedLanguage);
+							dayjs.locale(savedLanguage);
+						}
 						try {
 							await config.set(await getBackendConfig());
 						} catch (error) {
