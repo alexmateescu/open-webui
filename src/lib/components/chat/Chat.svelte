@@ -257,7 +257,11 @@
 			let next = total + 4 + estimateTokens(message.content);
 			next += estimateTokens(message.output);
 			next += estimateTokens(message.tool_calls);
-			next += estimateTokens(message.files);
+			if (message.files?.length) {
+				next += estimateTokens(
+					JSON.stringify(message.files).replace(/data:[\w/+.;=%-]*;base64,[A-Za-z0-9+/=]*/g, '')
+				);
+			}
 			return next;
 		}, 0);
 
@@ -2402,12 +2406,16 @@
 				} else {
 					taskIds = null;
 					// No active tasks and message incomplete → generation was interrupted
-					if (
-						currentMessage?.role === 'assistant' &&
-						!currentMessage.done &&
-						!messageHasPendingAskUser(currentMessage)
-					) {
-						currentMessage.done = true;
+					if (pendingTaskIds.length === 0) {
+						for (const message of Object.values(history.messages)) {
+							if (
+								message?.role === 'assistant' &&
+								!message.done &&
+								!messageHasPendingAskUser(message)
+							) {
+								message.done = true;
+							}
+						}
 					}
 				}
 
